@@ -29,10 +29,11 @@ services:
   authelia:
     image: authelia/authelia:latest
     labels:
-  - "traefik.enable=true"
-  - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify"
-  - "traefik.http.middlewares.authelia.forwardauth.trustforwardheader=true"
-  - "traefik.http.middlewares.authelia.forwardauth.authresponseheaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify"
+      - "traefik.http.middlewares.authelia.forwardauth.trustforwardheader=true"
+      - "traefik.http.middlewares.authelia.forwardauth.authresponseheaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+
 
     volumes:
       - ./authelia:/config
@@ -204,8 +205,6 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     container_name: dochub-mailpit
-    ports:
-      - "1025:1025"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mailpit.rule=Host(`mail.dochub.hu`)"
