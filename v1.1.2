@@ -28,6 +28,12 @@ services:
 
   authelia:
     image: authelia/authelia:latest
+    labels:
+  - "traefik.enable=true"
+  - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify"
+  - "traefik.http.middlewares.authelia.forwardauth.trustforwardheader=true"
+  - "traefik.http.middlewares.authelia.forwardauth.authresponseheaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+
     volumes:
       - ./authelia:/config
     environment:
