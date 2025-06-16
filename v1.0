@@ -179,9 +179,128 @@ services:
       timeout: 5s
       retries: 5
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dochub-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.dochub.hu`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=leresolver"
+    restart: always
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: dochub-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki:/etc/loki
+      - loki_data:/loki
+    restart: always
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: dochub-promtail
+    volumes:
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail:/etc/promtail
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/promtail-config.yml
+    restart: always
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: dochub-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_DOMAIN=grafana.dochub.hu
+      - TZ=Europe/Budapest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.dochub.hu`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=leresolver"
+    restart: always
+
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - "--api.dashboard=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.leresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.leresolver.acme.email=admin@dochub.hu"
+      - "--certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json"
+      - "--entrypoints.websecure.http.middlewares=authelia@docker"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik:/letsencrypt"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.dochub.hu`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=leresolver"
+
+  authelia:
+    image: authelia/authelia:latest
+    volumes:
+      - ./authelia:/config
+    environment:
+      - TZ=Europe/Budapest
+    ports:
+      - "9091:9091"  # optional: csak akkor ha debugolsz
+    restart: unless-stopped
+
+  whoami:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.dochub.hu`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=leresolver"
+      - "traefik.http.routers.whoami.middlewares=authelia@docker"
+
+  backup:
+    image: alpine
+    depends_on:
+      - postgres
+      - minio
+      - n8n
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+      - n8n_data:/home/node/.n8n:ro
+      - ./backup-scripts:/scripts
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      apk add --no-cache bash curl zip aws-cli postgresql-client &&
+      crond -f
+
 volumes:
   postgres_data:
   portainer_data:
   uptime-kuma-data:
   minio_data:
   n8n_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  traefik_letsencrypt:
